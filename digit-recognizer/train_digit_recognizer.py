@@ -32,19 +32,8 @@ def train(
     x = train_data.drop(["label"], axis=1).values
     y = train_data["label"].values
 
-    x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.2, random_state=seed)
-    x_train_tensor = torch.tensor(x_train, dtype=torch.float32)
-    y_train_tensor = torch.tensor(y_train, dtype=torch.long)
-    x_val_tensor = torch.tensor(x_val, dtype=torch.float32)
-    y_val_tensor = torch.tensor(y_val, dtype=torch.long)
     x_test_tensor = torch.tensor(test_data.values, dtype=torch.float32)
-
-    train_dataset = TensorDataset(x_train_tensor, y_train_tensor)
-    val_dataset = TensorDataset(x_val_tensor, y_val_tensor)
     test_dataset = TensorDataset(x_test_tensor)
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     model = load_model(model_name, **kwargs)
@@ -58,6 +47,17 @@ def train(
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
     for epoch in range(num_epoch):
+        x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.2, random_state=seed)
+        x_train_tensor = torch.tensor(x_train, dtype=torch.float32)
+        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+        x_val_tensor = torch.tensor(x_val, dtype=torch.float32)
+        y_val_tensor = torch.tensor(y_val, dtype=torch.long)
+
+        train_dataset = TensorDataset(x_train_tensor, y_train_tensor)
+        val_dataset = TensorDataset(x_val_tensor, y_val_tensor)
+
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         metrics = {"train_acc": [], "val_acc": []}
 
         for img, label in train_loader:
