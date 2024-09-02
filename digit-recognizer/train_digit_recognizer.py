@@ -138,13 +138,13 @@ if __name__ == "__main__":
 
     # optional: additional model hyperparamters
     # parser.add_argument("--num_layers", type=int, default=3)
-    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--weight_decay", type=bool, default=False)
-    parser.add_argument("--train", type=bool, default=True)
+    parser.add_argument("--train", type=bool, default=False)
 
     args = vars(parser.parse_args())
     if args["train"]:
         # pass all arguments to train
         train(** args)
     else:
-        test(** args)
+        test(args["model_name"], args["batch_size"], args["train"])

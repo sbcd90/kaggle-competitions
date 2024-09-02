@@ -9,59 +9,32 @@ class ClassificationLoss(nn.Module):
 
 
 class DigitRecognizer(nn.Module):
-    class Block(nn.Module):
-        def __init__(self, in_channels, out_channels, stride):
-            super().__init__()
-            kernel_size = 3
-            padding = (kernel_size - 1) // 2
-
-            layers = []
-            c1 = in_channels
-
-            no_of_layers = 1
-            for _ in range(no_of_layers):
-                layers.append(nn.Conv2d(c1, out_channels, kernel_size, stride, padding))
-                layers.append(nn.ReLU())
-                layers.append(nn.Conv2d(out_channels, out_channels, kernel_size, 1, padding))
-                layers.append(nn.ReLU())
-                layers.append(nn.Conv2d(out_channels, out_channels, kernel_size, 1, padding))
-                layers.append(nn.ReLU())
-
-                c1 = out_channels
-            self.model = nn.Sequential(*layers)
-
-            if stride != 1 or in_channels != out_channels:
-                self.skip = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride)
-            else:
-                self.skip = nn.Identity()
-
-        def forward(self, x):
-            y = self.model(x)
-            return y + self.skip(x)
 
     def __init__(self, in_channels: int = 1, num_classes: int = 10):
         super().__init__()
 
-        channels_l0 = 64
-        cnn_layers = [
-            nn.Conv2d(in_channels, channels_l0, kernel_size=11, stride=2, padding=(11 - 1) // 2),
-            nn.ReLU()
-        ]
-
-        c1 = channels_l0
-        n_blocks = 1
-        for _ in range(n_blocks):
-            c2 = c1 * 2
-            cnn_layers.append(self.Block(c1, c2, stride=2))
-            c1 = c2
-
-        cnn_layers.append(nn.AdaptiveAvgPool2d((1, 1)))
-        cnn_layers.append(nn.Conv2d(c1, num_classes, kernel_size=1))
-        cnn_layers.append(nn.Flatten())
-        self.network = nn.Sequential(*cnn_layers)
+        self.cnn_layers = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.fc_layers = nn.Sequential(
+            nn.Linear(64 * 7 * 7, 256),
+            nn.ReLU(inplace=True),
+            nn.Linear(256, 10)
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        logits = self.network(x)
+        logits = self.cnn_layers(x)
+        logits = logits.view(logits.size(0), -1)
+        logits = self.fc_layers(logits)
         return logits
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
