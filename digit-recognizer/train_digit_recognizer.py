@@ -16,6 +16,7 @@ def train(
         batch_size: int = 32,
         seed: int = 2024,
         weight_decay: bool = False,
+        train: bool = True,
         **kwargs,
 ):
     if torch.cuda.is_available():
@@ -96,6 +97,7 @@ def train(
 def test(
         model_name: str = "digit_recognizer",
         batch_size: int = 32,
+        train: bool = False,
         **kwargs,
 ):
     if torch.cuda.is_available():
