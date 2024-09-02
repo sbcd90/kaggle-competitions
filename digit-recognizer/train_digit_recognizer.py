@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from models import ClassificationLoss, load_model, save_model
 
 
+# python3 train_digit_recognizer.py --model_name=digit_recognizer --weight_decay=True --lr=0.0001 --num_epoch=200
 def train(
         model_name: str = "digit_recognizer",
         num_epoch: int = 50,
@@ -27,14 +28,9 @@ def train(
     np.random.seed(seed)
 
     train_data = pd.read_csv("data/train.csv")
-    test_data = pd.read_csv("data/test.csv")
 
     x = train_data.drop(["label"], axis=1).values
     y = train_data["label"].values
-
-    x_test_tensor = torch.tensor(test_data.values, dtype=torch.float32)
-    test_dataset = TensorDataset(x_test_tensor)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     model = load_model(model_name, **kwargs)
     model = model.to(device)
@@ -97,6 +93,39 @@ def train(
     save_model(model)
 
 
+def test(
+        model_name: str = "digit_recognizer",
+        batch_size: int = 32,
+        **kwargs,
+):
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        print("CUDA not available, using CPU")
+        device = torch.device("cpu")
+
+    model = load_model(model_name, **kwargs)
+    model = model.to(device)
+    model.eval()
+
+    test_data = pd.read_csv("data/test.csv")
+    x_test_tensor = torch.tensor(test_data.values, dtype=torch.float32)
+    test_dataset = TensorDataset(x_test_tensor)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    predictions = []
+
+    with torch.no_grad():
+        for img in test_loader:
+            img = img[0].to(device).view(-1, 1, 28, 28)
+            out = model(img)
+
+            _, predicted = torch.max(out, 1)
+            predictions.extend(predicted.cpu().numpy())
+    submission = pd.DataFrame({"ImageId": np.arange(1, len(predictions) + 1), "Label": predictions})
+    submission.to_csv("mnist_classify.csv", index=False)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -109,6 +138,11 @@ if __name__ == "__main__":
     # parser.add_argument("--num_layers", type=int, default=3)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--weight_decay", type=bool, default=False)
+    parser.add_argument("--train", type=bool, default=True)
 
-    # pass all arguments to train
-    train(**vars(parser.parse_args()))
+    args = vars(parser.parse_args())
+    if args["train"]:
+        # pass all arguments to train
+        train(** args)
+    else:
+        test(** args)

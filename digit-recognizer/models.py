@@ -64,6 +64,9 @@ class DigitRecognizer(nn.Module):
         logits = self.network(x)
         return logits
 
+    def predict(self, x: torch.Tensor) -> torch.Tensor:
+        return self(x).argmax(dim=1)
+
 
 MODEL_FACTORY = {
     "digit_recognizer": DigitRecognizer
