@@ -3,10 +3,10 @@ import argparse
 import numpy as np
 import pandas as pd
 import torch.cuda
-from torch.utils.data import DataLoader, TensorDataset
-from models import ClassificationLoss, load_model, save_model
+from torch.utils.data import DataLoader
+from torch.optim import lr_scheduler
+from models import load_model, save_model
 from datasets.digit_recognizer_dataset import DigitRecognizerDataset
-from sklearn.model_selection import train_test_split
 
 
 # python3 train_digit_recognizer.py --model_name=digit_recognizer --weight_decay=True --lr=0.0001 --num_epoch=200
@@ -30,11 +30,15 @@ def train(
     np.random.seed(seed)
 
     train_data = pd.read_csv("data/train.csv")
+    test_data = pd.read_csv("data/test.csv")
+    test_result = pd.read_csv("data/submission.csv")
 
-    x = train_data.drop(["label"], axis=1)
-    y = train_data["label"]
+    x_train = train_data.drop(["label"], axis=1)
+    y_train = train_data["label"]
+    x_val = test_data
+    y_val = test_result["Label"]
 
-    x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.2, random_state=seed)
+    #x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.2, random_state=seed)
     train_dataset = DigitRecognizerDataset(x_train, y_train, transform_pipeline="aug")
     val_dataset = DigitRecognizerDataset(x_val, y_val)
 
@@ -43,15 +47,17 @@ def train(
 
     model = load_model(model_name, **kwargs)
     model = model.to(device)
-    model.train()
 
-    loss_func = ClassificationLoss()
+    loss_func = torch.nn.CrossEntropyLoss()
     if weight_decay is True:
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     else:
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
 
     for epoch in range(num_epoch):
+        model.train()
+        exp_lr_scheduler.step()
         metrics = {"train_acc": [], "val_acc": []}
 
         for img, label in train_loader:
@@ -108,15 +114,14 @@ def test(
     model.eval()
 
     test_data = pd.read_csv("data/test.csv")
-    x_test_tensor = torch.tensor(test_data.values, dtype=torch.float32)
-    test_dataset = TensorDataset(x_test_tensor)
+    test_dataset = DigitRecognizerDataset(test_data, None)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     predictions = []
 
     with torch.no_grad():
         for img in test_loader:
-            img = img[0].to(device).view(-1, 1, 28, 28)
+            img = img.to(device).view(-1, 1, 28, 28)
             out = model(img)
 
             _, predicted = torch.max(out, 1)
