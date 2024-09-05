@@ -119,10 +119,10 @@ def test(
 
     predictions = []
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for img in test_loader:
             img = img.to(device).view(-1, 1, 28, 28)
-            out = model(img)
+            out = torch.nn.functional.softmax(model(img))
 
             _, predicted = torch.max(out, 1)
             predictions.extend(predicted.cpu().numpy())

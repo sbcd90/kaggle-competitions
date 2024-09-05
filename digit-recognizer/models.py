@@ -76,7 +76,7 @@ MODEL_FACTORY = {
 
 def load_model(
         model_name: str,
-        with_weights: bool = False,
+        with_weights: bool = True,
         **model_kwargs,
 ) -> nn.Module:
     m = MODEL_FACTORY[model_name](**model_kwargs)
