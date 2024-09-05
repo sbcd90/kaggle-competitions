@@ -1,4 +1,5 @@
 import pandas as pd
+from av.deprecation import method
 from torchvision.transforms.v2 import RandomRotation
 from torchvision import transforms
 
@@ -6,26 +7,32 @@ from matplotlib import pyplot as plt
 import numpy as np
 from PIL import Image
 
+
 class RandomShift(object):
     def __init__(self, shift):
         self.shift = shift
 
+    @staticmethod
+    def get_params(shift):
+        """Get parameters for ``rotate`` for a random rotation.
+        Returns:
+            sequence: params to be passed to ``rotate`` for random rotation.
+        """
+        hshift, vshift = np.random.uniform(-shift, shift, size=2)
+
+        return hshift, vshift
+
     def __call__(self, img):
-        # Apply the random affine transformation without resampling
-        affine_transform = transforms.RandomAffine(degrees=0, translate=(self.shift, self.shift))
-        img = affine_transform(img)
+        hshift, vshift = self.get_params(self.shift)
 
-        # Apply resampling separately using PIL
-        img = img.transform(img.size, Image.AFFINE, (1, 0, 0, 0, 1, 0), resample=Image.BICUBIC)
-
-        return img
+        return img.transform(img.size, Image.AFFINE, (1,0,hshift,0,1,vshift), resample=Image.BICUBIC, fill=1)
 
 rotate = RandomRotation(20)
-shift = RandomShift(0.2)
+shift = RandomShift(3)
 composed = transforms.Compose(
     [
         RandomRotation(20),
-        RandomShift(0.2)
+        RandomShift(3)
     ]
 )
 

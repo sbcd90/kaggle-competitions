@@ -4,6 +4,26 @@ import numpy as np
 import pandas as pd
 from torchvision import transforms
 from torchvision.transforms.v2 import RandomRotation
+from PIL import Image
+
+class RandomShift(object):
+    def __init__(self, shift):
+        self.shift = shift
+
+    @staticmethod
+    def get_params(shift):
+        """Get parameters for ``rotate`` for a random rotation.
+        Returns:
+            sequence: params to be passed to ``rotate`` for random rotation.
+        """
+        hshift, vshift = np.random.uniform(-shift, shift, size=2)
+
+        return hshift, vshift
+
+    def __call__(self, img):
+        hshift, vshift = self.get_params(self.shift)
+
+        return img.transform(img.size, Image.AFFINE, (1,0,hshift,0,1,vshift), resample=Image.BICUBIC, fill=1)
 
 
 class DigitRecognizerDataset(Dataset):
@@ -19,7 +39,6 @@ class DigitRecognizerDataset(Dataset):
         else:
             self.X = x_input.values.reshape((-1, 28, 28)).astype(np.uint8)[:, :, :, None]
             self.y = torch.from_numpy(y_input.values)
-        print()
 
 
     def __len__(self):
@@ -47,7 +66,7 @@ class DigitRecognizerDataset(Dataset):
                 [
                     transforms.ToPILImage(),
                     RandomRotation(degrees=20),
-                    #RandomAffine(degrees=0, translate=(0.2, 0.2), resample=Image.Resampling.BICUBIC, fill=1),
+                    RandomShift(shift=3),
                     transforms.ToTensor(),
                     transforms.Normalize(mean=(0.5,), std=(0.5,))
                 ]
