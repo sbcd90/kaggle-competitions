@@ -1,9 +1,11 @@
 import glob
 
+import pandas as pd
 import torch
 import numpy as np
 import tensorflow as tf
 import argparse
+import torch.nn as nn
 
 from torch.utils.data import DataLoader
 
@@ -16,8 +18,16 @@ feature_description = {
     "image": tf.io.FixedLenFeature([], tf.string)
 }
 
+feature_description_test = {
+    "id": tf.io.FixedLenFeature([], tf.string),
+    "image": tf.io.FixedLenFeature([], tf.string)
+}
+
 def __parse_image_function(example_photo):
     return tf.io.parse_single_example(example_photo, feature_description)
+
+def __parse_image_function_test(example_photo):
+    return tf.io.parse_single_example(example_photo, feature_description_test)
 
 def train(
         model_name: str = "petals_to_metal",
@@ -28,7 +38,7 @@ def train(
         weight_decay: bool = False,
         train: bool = True,
         **kwargs,
-):
+) -> nn.Module:
     if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
@@ -132,7 +142,54 @@ def train(
                 f"train_acc={epoch_train_acc:.4f} "
                 f"val_acc={epoch_val_acc:.4f}"
             )
+        break
     save_model(model)
+    return model
+
+def test(
+        trained_model: nn.Module,
+        batch_size: int = 32
+) -> None:
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        print("CUDA not available, using CPU")
+        device = torch.device("cpu")
+
+    test_files = glob.glob("data/tpu-getting-started/*/test/*.tfrec")
+    test_ids = []
+    test_classes = []
+    test_images = []
+
+    for i in test_files:
+        test_image_dataset = tf.data.TFRecordDataset(i)
+        test_image_dataset = test_image_dataset.map(__parse_image_function_test)
+
+        ids = [str(id_features["id"].numpy())[2: -1] for id_features in test_image_dataset]
+        test_ids.extend(ids)
+
+        images = [image_features["image"].numpy() for image_features in test_image_dataset]
+        test_images.extend(images)
+
+    test_dataset = PetalsToMetalsDataset(test_ids, test_classes, test_images)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    image_ids = []
+    predictions = []
+    trained_model = trained_model.to(device)
+    trained_model.eval()
+
+    with torch.inference_mode():
+        for test_data in test_loader:
+            img = test_data[0].to(device)
+            ids = test_data[2]
+            image_ids.extend(list(ids))
+
+            out = torch.nn.functional.softmax(trained_model(img))
+            _, predicted = torch.max(out, 1)
+            predictions.extend(predicted.cpu().numpy())
+    submission = pd.DataFrame({"id": np.arange(1, len(predictions) + 1), "label": predictions})
+    submission.to_csv("submission.csv", index=False)
 
 
 if __name__ == "__main__":
@@ -152,4 +209,8 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
     if args["train"]:
         # pass all arguments to train
-        train(**args)
+        model = train(**args)
+        test(model, args["batch_size"])
+    else:
+        model = load_model(model_name=args["model_name"])
+        test(model, args["batch_size"])

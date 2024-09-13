@@ -24,7 +24,10 @@ class PetalsToMetalsDataset(Dataset):
         image = self.images[item]
         image = Image.open(io.BytesIO(image))
         image = self.transform(image)
-        return image, int(self.classes[item]), self.ids[item]
+        if item in self.classes:
+            return image, int(self.classes[item]), self.ids[item]
+        else:
+            return image, 0, self.ids[item]
 
     def get_transform(self, transform_pipeline: str = "default"):
         xform = None
