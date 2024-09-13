@@ -29,6 +29,7 @@ def __parse_image_function(example_photo):
 def __parse_image_function_test(example_photo):
     return tf.io.parse_single_example(example_photo, feature_description_test)
 
+# python3 train_petals_to_metals.py --batch_size=128 --model_name=petals_to_metal --lr=0.01 --num_epoch=20 --train=True
 def train(
         model_name: str = "petals_to_metal",
         num_epoch: int = 50,
@@ -136,13 +137,11 @@ def train(
         epoch_train_acc = torch.as_tensor(metrics["train_acc"]).mean()
         epoch_val_acc = torch.as_tensor(metrics["val_acc"]).mean()
 
-        if epoch == 0 or epoch == num_epoch - 1 or (epoch + 1) % 10 == 0:
-            print(
-                f"Epoch {epoch + 1:2d} / {num_epoch:2d}: "
-                f"train_acc={epoch_train_acc:.4f} "
-                f"val_acc={epoch_val_acc:.4f}"
-            )
-        break
+        print(
+            f"Epoch {epoch + 1:2d} / {num_epoch:2d}: "
+            f"train_acc={epoch_train_acc:.4f} "
+            f"val_acc={epoch_val_acc:.4f}"
+        )
     save_model(model)
     return model
 
