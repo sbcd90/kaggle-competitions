@@ -91,8 +91,8 @@ def train(
 #    plt.axis("off")
 #    plt.show()
 
-    train_dataset = PetalsToMetalsDataset(train_ids, train_classes, train_images, transform_pipeline="aug")
-    val_dataset = PetalsToMetalsDataset(val_ids, val_classes, val_images)
+    train_dataset = PetalsToMetalsDataset(train_ids, train_classes, train_images, transform_pipeline="aug", data_category="train")
+    val_dataset = PetalsToMetalsDataset(val_ids, val_classes, val_images, data_category="val")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -146,8 +146,9 @@ def train(
     return model
 
 def test(
-        trained_model: nn.Module,
-        batch_size: int = 32
+        model_name: str = "petals_to_metal",
+        batch_size: int = 32,
+        **kwargs
 ) -> None:
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -170,11 +171,12 @@ def test(
         images = [image_features["image"].numpy() for image_features in test_image_dataset]
         test_images.extend(images)
 
-    test_dataset = PetalsToMetalsDataset(test_ids, test_classes, test_images)
+    test_dataset = PetalsToMetalsDataset(test_ids, test_classes, test_images, data_category="test")
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     image_ids = []
     predictions = []
+    trained_model = load_model(model_name, **kwargs)
     trained_model = trained_model.to(device)
     trained_model.eval()
 
@@ -187,7 +189,7 @@ def test(
             out = torch.nn.functional.softmax(trained_model(img))
             _, predicted = torch.max(out, 1)
             predictions.extend(predicted.cpu().numpy())
-    submission = pd.DataFrame({"id": np.arange(1, len(predictions) + 1), "label": predictions})
+    submission = pd.DataFrame({"id": image_ids, "label": predictions}).drop_duplicates(subset="id", keep="first")
     submission.to_csv("submission.csv", index=False)
 
 
@@ -209,7 +211,5 @@ if __name__ == "__main__":
     if args["train"]:
         # pass all arguments to train
         model = train(**args)
-        test(model, args["batch_size"])
     else:
-        model = load_model(model_name=args["model_name"])
-        test(model, args["batch_size"])
+        test(args["model_name"], args["batch_size"])

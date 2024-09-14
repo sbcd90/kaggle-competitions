@@ -10,12 +10,14 @@ class PetalsToMetalsDataset(Dataset):
                  ids,
                  classes,
                  images,
-                 transform_pipeline: str = "default"):
+                 transform_pipeline: str = "default",
+                 data_category: str = "train"):
         self.transform = self.get_transform(transform_pipeline)
 
         self.ids = ids
         self.classes = classes
         self.images = images
+        self.data_category = data_category
 
     def __len__(self):
         return len(self.ids)
@@ -24,7 +26,7 @@ class PetalsToMetalsDataset(Dataset):
         image = self.images[item]
         image = Image.open(io.BytesIO(image))
         image = self.transform(image)
-        if item in self.classes:
+        if self.data_category != "test":
             return image, int(self.classes[item]), self.ids[item]
         else:
             return image, 0, self.ids[item]
