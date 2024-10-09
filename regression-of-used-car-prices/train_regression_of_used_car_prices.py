@@ -66,8 +66,6 @@ def train(
 
     for epoch in range(num_epoch):
         exp_lr_scheduler.step()
-        total_training_loss = 0.0
-        total_val_loss = 0.0
         metrics = {"training_loss": [], "val_loss": []}
 
         for X, y in train_loader:
@@ -79,11 +77,11 @@ def train(
             optimizer.zero_grad()
 
             loss = loss_func(out, y)
-            total_training_loss += loss.item()
+            training_loss = loss.item()
 
             loss.backward()
             optimizer.step()
-            metrics["training_loss"].append(total_training_loss)
+            metrics["training_loss"].append(training_loss)
 
         with torch.inference_mode():
             for X, y in val_loader:
@@ -93,8 +91,8 @@ def train(
                 out = model(X)
 
                 loss = loss_func(out, y)
-                total_val_loss += loss.item()
-                metrics["val_loss"].append(total_val_loss)
+                val_loss = loss.item()
+                metrics["val_loss"].append(val_loss)
 
         epoch_train_rmse_loss = torch.sqrt(torch.as_tensor(metrics["training_loss"]).mean())
         epoch_val_rmse_loss = torch.sqrt(torch.as_tensor(metrics["val_loss"]).mean())
