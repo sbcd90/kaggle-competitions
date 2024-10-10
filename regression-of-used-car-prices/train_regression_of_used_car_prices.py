@@ -66,7 +66,7 @@ def train(
 
     for epoch in range(num_epoch):
         exp_lr_scheduler.step()
-        metrics = {"training_loss": [], "val_loss": []}
+        metrics = {"training_loss": 0.0, "val_loss": 0.0}
 
         for X, y in train_loader:
             X = X.to(device)
@@ -77,11 +77,10 @@ def train(
             optimizer.zero_grad()
 
             loss = loss_func(out, y)
-            training_loss = loss.item()
+            metrics["training_loss"] += loss.item() * X.shape[0]
 
             loss.backward()
             optimizer.step()
-            metrics["training_loss"].append(training_loss)
 
         with torch.inference_mode():
             for X, y in val_loader:
@@ -91,15 +90,16 @@ def train(
                 out = model(X)
 
                 loss = loss_func(out, y)
-                val_loss = loss.item()
-                metrics["val_loss"].append(val_loss)
+                metrics["val_loss"] += loss.item() * X.shape[0]
 
-        epoch_train_rmse_loss = torch.sqrt(torch.as_tensor(metrics["training_loss"]).mean())
-        epoch_val_rmse_loss = torch.sqrt(torch.as_tensor(metrics["val_loss"]).mean())
+        epoch_train_rmse_loss = torch.sqrt(torch.as_tensor(metrics["training_loss"] / len(train_loader.dataset)))
+        epoch_val_rmse_loss = torch.sqrt(torch.as_tensor(metrics["val_loss"] / len(val_loader.dataset)))
 
         if epoch == 0 or epoch == num_epoch - 1 or (epoch + 1) % 10 == 0:
+            current_lr = optimizer.param_groups[0]['lr']
             print(
                 f"Epoch {epoch + 1:2d} / {num_epoch:2d}: "
+                f"Learning Rate: {current_lr:.6f} "
                 f"train_loss={epoch_train_rmse_loss:.4f} "
                 f"val_loss={epoch_val_rmse_loss:.4f}"
             )
