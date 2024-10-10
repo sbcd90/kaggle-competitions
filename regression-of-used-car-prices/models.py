@@ -27,22 +27,33 @@ class UsedCarPricesModel(nn.Module):
     def __init__(self, input_channels: int = 11):
         super().__init__()
 
-        layer_size = 128
-        num_layers = 4
-        c = input_channels
+#        layer_size = 128
+#        num_layers = 4
+#        c = input_channels
 
-        layers = nn.ModuleList()
-        layers.append(nn.Linear(c, layer_size, bias=False))
-        c = layer_size
+#        layers = nn.ModuleList()
+#        layers.append(nn.Linear(c, layer_size, bias=False))
+#        c = layer_size
 
-        for _ in range(num_layers):
-            layers.append(Block(c, layer_size))
-            c = layer_size
-        layers.append(nn.Linear(c, 1))
-        self.model = nn.Sequential(*layers)
+#        for _ in range(num_layers):
+#            layers.append(Block(c, layer_size))
+#            c = layer_size
+#        layers.append(nn.Linear(c, 1))
+#        self.model = nn.Sequential(*layers)
+        self.fc1 = nn.Linear(input_channels, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc4 = nn.Linear(128, 1)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(p=0.3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)
+        #return self.model(x)
+        x = self.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.relu(self.fc2(x))
+        x = self.dropout(x)
+        x = self.fc4(x)
+        return x
 
 model_factory = {
     "used_car_prices": UsedCarPricesModel

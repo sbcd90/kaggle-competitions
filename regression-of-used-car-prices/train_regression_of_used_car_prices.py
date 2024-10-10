@@ -16,7 +16,7 @@ def train(
         lr: float = 1e-2,
         batch_size: int = 32,
         seed: int = 2024,
-        weight_decay: bool = False,
+        weight_decay: float = None,
         train: bool = True,
         **kwargs,
 ):
@@ -58,9 +58,10 @@ def train(
     model.train()
 
     loss_func = torch.nn.MSELoss()
-    if weight_decay is True:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    if weight_decay is not None:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     else:
+        print("weight_decay is None")
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     exp_lr_scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
@@ -116,7 +117,7 @@ if __name__ == "__main__":
     # optional: additional model hyperparamters
     # parser.add_argument("--num_layers", type=int, default=3)
     parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--weight_decay", type=bool, default=False)
+    parser.add_argument("--weight_decay", type=float, default=None)
     parser.add_argument("--train", type=bool, default=False)
 
     args = vars(parser.parse_args())
