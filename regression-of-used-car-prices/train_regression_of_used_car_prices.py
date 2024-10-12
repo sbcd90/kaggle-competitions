@@ -10,6 +10,7 @@ from models import load_model, save_model
 
 from datasets.regression_of_used_car_prices_dataset import UsedCarPricesDataset
 
+# python3 train_regression_of_used_car_prices.py --model_name=used_car_prices --lr=0.02 --weight_decay=0.001 --batch_size=32 --num_epoch=100 --seed=42 --train=True
 def train(
         model_name: str = "used_car_prices",
         num_epoch: int = 50,
@@ -106,6 +107,53 @@ def train(
             )
     save_model(model)
 
+def test(
+        model_name: str = "used_car_prices",
+        batch_size: int = 32,
+        train: bool = False,
+        **kwargs,
+):
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        print("CUDA not available, using CPU")
+        device = torch.device("cpu")
+
+    model = load_model(model_name, **kwargs)
+    model = model.to(device)
+    model.eval()
+
+    test_data = pd.read_csv("data/playground-series-s4e9/test.csv")
+
+    categorical_cols = ["brand", "model", "fuel_type", "engine", "transmission", "ext_col", "int_col",
+                        "accident", "clean_title"]
+    label_encoders = {col: LabelEncoder() for col in categorical_cols}
+    for col in categorical_cols:
+        test_data[col] = label_encoders[col].fit_transform(test_data[col].astype(str))
+
+    numerical_cols = ["model_year", "milage"]
+    scaler = StandardScaler()
+
+    test_data[numerical_cols] = scaler.fit_transform(test_data[numerical_cols])
+
+    X_test = test_data.drop(columns=["id"])
+    y_test = test_data["id"].values
+    test_dataset = UsedCarPricesDataset(X_test, y_test)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+    ids = []
+    predictions = []
+    with torch.inference_mode():
+        for X, y in test_loader:
+            X = X.to(device)
+            ids.extend(list(y))
+
+            out = model(X)
+            predictions.extend(out.cpu().numpy())
+    submission = pd.DataFrame({"id": ids, "price": predictions})
+    submission.to_csv("submission.csv", index=False)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -124,3 +172,5 @@ if __name__ == "__main__":
     if args["train"]:
         # pass all arguments to train
         train(** args)
+    else:
+        test(args["model_name"], args["batch_size"])
