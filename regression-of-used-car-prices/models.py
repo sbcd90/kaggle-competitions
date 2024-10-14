@@ -75,7 +75,7 @@ def save_model(model):
             return torch.save(model.state_dict(), Path(__file__).resolve().parent / f"{n}.th")
     raise ValueError(f"Model type '{str(type(model))}' not supported")
 
-def load_model(model_name: str, with_weights: bool=False, **model_kwargs):
+def load_model(model_name: str, with_weights: bool=True, **model_kwargs):
     """
         Called by the grader to load a pre-trained model by name
         """

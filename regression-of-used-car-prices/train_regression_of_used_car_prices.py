@@ -138,18 +138,20 @@ def test(
 
     X_test = test_data.drop(columns=["id"])
     y_test = test_data["id"].values
-    test_dataset = UsedCarPricesDataset(X_test, y_test)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    test_dataset = UsedCarPricesDataset(X_test.values, y_test)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     ids = []
     predictions = []
     with torch.inference_mode():
         for X, y in test_loader:
             X = X.to(device)
-            ids.extend(list(y))
+            ids.extend(y.tolist())
 
             out = model(X)
-            predictions.extend(out.cpu().numpy())
+            predictions.extend(out.cpu().numpy().tolist())
+    ids = list(map(lambda x: int(x), ids))
+    predictions = list(map(lambda x: x[0], predictions))
     submission = pd.DataFrame({"id": ids, "price": predictions})
     submission.to_csv("submission.csv", index=False)
 
