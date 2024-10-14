@@ -64,10 +64,9 @@ def train(
     else:
         print("weight_decay is None")
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-    exp_lr_scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+    exp_lr_scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, "max", patience=50)
 
     for epoch in range(num_epoch):
-        exp_lr_scheduler.step()
         metrics = {"training_loss": 0.0, "val_loss": 0.0}
 
         for X, y in train_loader:
@@ -96,6 +95,7 @@ def train(
 
         epoch_train_rmse_loss = torch.sqrt(torch.as_tensor(metrics["training_loss"] / len(train_loader.dataset)))
         epoch_val_rmse_loss = torch.sqrt(torch.as_tensor(metrics["val_loss"] / len(val_loader.dataset)))
+        exp_lr_scheduler.step(metrics=epoch_val_rmse_loss)
 
         if epoch == 0 or epoch == num_epoch - 1 or (epoch + 1) % 10 == 0:
             current_lr = optimizer.param_groups[0]['lr']
