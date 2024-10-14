@@ -77,7 +77,7 @@ def train(
 
             optimizer.zero_grad()
 
-            loss = loss_func(out, y)
+            loss = loss_func(out.squeeze(), y)
             metrics["training_loss"] += loss.item() * X.shape[0]
 
             loss.backward()
@@ -90,7 +90,7 @@ def train(
 
                 out = model(X)
 
-                loss = loss_func(out, y)
+                loss = loss_func(out.squeeze(), y)
                 metrics["val_loss"] += loss.item() * X.shape[0]
 
         epoch_train_rmse_loss = torch.sqrt(torch.as_tensor(metrics["training_loss"] / len(train_loader.dataset)))
