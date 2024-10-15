@@ -1,4 +1,6 @@
 import argparse
+from cProfile import label
+
 import torch
 import numpy as np
 import pandas as pd
@@ -7,10 +9,11 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 from models import load_model, save_model
+import pickle
 
 from datasets.regression_of_used_car_prices_dataset import UsedCarPricesDataset
 
-# python3 train_regression_of_used_car_prices.py --model_name=used_car_prices --lr=0.02 --weight_decay=0.001 --batch_size=32 --num_epoch=100 --seed=42 --train=True
+# python3 train_regression_of_used_car_prices.py --model_name=used_car_prices --lr=0.0002 --weight_decay=0.001 --batch_size=64 --num_epoch=64 --seed=42 --train=True
 def train(
         model_name: str = "used_car_prices",
         num_epoch: int = 50,
@@ -35,6 +38,9 @@ def train(
     categorical_cols = ["brand", "model", "fuel_type", "engine", "transmission", "ext_col", "int_col",
                         "accident", "clean_title"]
     label_encoders = {col: LabelEncoder() for col in categorical_cols}
+    with open("label_encoders.pkl", "wb") as f:
+        pickle.dump(label_encoders, f)
+
     for col in categorical_cols:
         train_data[col] = label_encoders[col].fit_transform(train_data[col].astype(str))
 
@@ -127,9 +133,12 @@ def test(
 
     categorical_cols = ["brand", "model", "fuel_type", "engine", "transmission", "ext_col", "int_col",
                         "accident", "clean_title"]
-    label_encoders = {col: LabelEncoder() for col in categorical_cols}
+    with open("label_encoders.pkl", "rb") as f:
+        label_encoders = pickle.load(f)
+
     for col in categorical_cols:
-        test_data[col] = label_encoders[col].fit_transform(test_data[col].astype(str))
+        test_data[col] = test_data[col].map(lambda s: label_encoders[col].classes_.tolist().index(s)
+            if s in label_encoders[col].classes_ else -1)
 
     numerical_cols = ["model_year", "milage"]
     scaler = StandardScaler()
