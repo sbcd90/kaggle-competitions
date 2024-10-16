@@ -38,11 +38,11 @@ def train(
     categorical_cols = ["brand", "model", "fuel_type", "engine", "transmission", "ext_col", "int_col",
                         "accident", "clean_title"]
     label_encoders = {col: LabelEncoder() for col in categorical_cols}
-    with open("label_encoders.pkl", "wb") as f:
-        pickle.dump(label_encoders, f)
 
     for col in categorical_cols:
         train_data[col] = label_encoders[col].fit_transform(train_data[col].astype(str))
+    with open("label_encoders.pkl", "wb") as f:
+        pickle.dump(label_encoders, f)
 
     numerical_cols = ["model_year", "milage"]
     scaler = StandardScaler()
