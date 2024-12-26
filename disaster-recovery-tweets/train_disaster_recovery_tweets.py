@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 from dataset.disaster_recovery_datasets import DisasterRecoveryDataset, collate_fn
 
 
-
+# python3 train_disaster_recovery_tweets.py --model_name=disaster_recovery_tweets --lr=0.0004 --weight_decay=True --num_epoch=140
 def __yield_tokens(sentences, tokenizer):
     for sentence in sentences:
         yield tokenizer(sentence)
@@ -116,6 +116,58 @@ def train(
             )
     save_model(model)
 
+def test(
+        model_name: str = "disaster_recovery_tweets",
+        train: bool = False,
+        **kwargs
+):
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        print("CUDA not available, using CPU")
+        device = torch.device("cpu")
+
+    torch.manual_seed(2024)
+    np.random.seed(2024)
+
+    train_sentences = pd.read_csv("data/nlp-getting-started/train.csv")
+    train_sentences = list(train_sentences["text"])
+    tokenizer = get_tokenizer("basic_english")
+    vocab = build_vocab_from_iterator(__yield_tokens(train_sentences, tokenizer), specials=["<unk>"])
+    vocab.set_default_index(vocab["<unk>"])
+
+    test_data = pd.read_csv("data/nlp-getting-started/test.csv")
+    test_sentences = list(test_data["text"])
+    test_ids = list(test_data["id"])
+
+    vocab_size = len(vocab)
+    num_layers = 2
+    num_heads = 1
+    num_positions = 128
+    d_model = 128
+
+    model = load_model(model_name, with_weights=True, vocab_size=vocab_size, d_model=d_model,
+                       num_layers=num_layers, num_heads=num_heads, num_positions=num_positions)
+    model = model.to(device)
+    model.eval()
+
+    test_dataset = DisasterRecoveryDataset(test_sentences, test_ids, tokenizer, vocab)
+    test_data = DataLoader(test_dataset, batch_size=32, shuffle=False, collate_fn=collate_fn)
+
+    test_ids = []
+    test_predictions = []
+    with torch.inference_mode():
+        for sentences, ids in test_data:
+            sentences = sentences.to(device)
+            out = model(sentences)
+            _, predicted = torch.max(out, 1)
+
+            test_ids.extend(ids)
+            test_predictions.extend(predicted.cpu().numpy())
+
+    df = pd.DataFrame({"id": test_ids, "target": test_predictions})
+    df.to_csv("submission.csv", index=False)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -131,4 +183,5 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", type=bool, default=False)
 
     # pass all arguments to train
-    train(**vars(parser.parse_args()))
+    #train(**vars(parser.parse_args()))
+    test(**vars(parser.parse_args()))
