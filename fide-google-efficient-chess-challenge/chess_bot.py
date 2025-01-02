@@ -1,229 +1,145 @@
 from Chessnut import Game
+import numpy as np
+import chess
+import torch.nn as nn
+import torch
+from pathlib import Path
 import random
 
+class MoveModel(nn.Module):
+    def __init__(self, input_size=768, hidden_size=1024, num_classes=64):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels=12, out_channels=128, kernel_size=2)
+        self.relu = nn.ReLU()
+        self.conv2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=2)
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(128 * 6 * 6, 1024)
+        self.fc2 = nn.Linear(1024, 1024)
+        self.fc4 = nn.Linear(1024, 64)
 
-class ChessBot:
-    def __init__(self):
-        self.piece_values = {"p": 1, "n": 3, "b": 3, "r": 5, "q": 9, "k": 0}
+    def forward(self, x):
+        x = self.relu(self.conv1(x))
+        x = self.relu(self.conv2(x))
+        x = self.flatten(x)
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        return x
 
-    def is_safe_for_king(self, game, move):
-        # turn = True if game.get_fen().split()[1] == "w" else False
-        # board = chess.Board(game.get_fen())
-        # board.push(chess.Move.from_uci(move))
-        #
-        # king_square = board.king(turn)
-        # if board.is_attacked_by(not turn, king_square):
-        #     return False
-        return True
+MODEL_FACTORY = {
+    "fide_google_chess_model_moved_from": MoveModel
+}
 
-    def evaluate_move_heuristics(self, game, move, en_passant_moves, castling_moves):
-        new_game = Game(game.get_fen())
+def board_position_list(board):
+    position_list = [0] * 64
+    for square, piece in board.piece_map().items():
+        piece_type = piece.piece_type
+        color_offset = 6 if piece.color == chess.BLACK else 0
+        position_list[square] = piece_type + color_offset
+    return position_list
 
-        score = 0
-        if new_game.board.get_piece(Game.xy2i(move[2:4])) != ' ':
-            captured_piece = new_game.board.get_piece(Game.xy2i(move[2:4])).lower()
-            if captured_piece:
-                score += self.piece_values[captured_piece.lower()]
+def board_position_list_one_hot(board):
+    one_hot = np.zeros((8, 8, 12), dtype=np.float32)
+    for square, piece in board.piece_map().items():
+        x = square // 8
+        y = square % 8
+        piece_type = piece.piece_type - 1
+        color_offset = 6 if piece.color == chess.BLACK else 0
+        one_hot[x, y, piece_type + color_offset] = 1
+    return one_hot
 
-        if move in en_passant_moves:
-            score += 3
+def load_model(
+        model_name: str = "fide_google_chess_model",
+        with_weights: bool = True,
+        **model_kwargs,
+) -> nn.Module:
+    m = MODEL_FACTORY[model_name](**model_kwargs)
 
-        if move in castling_moves:
-            if not self.is_safe_for_king(new_game, move):
-                score += 15
-            else:
-                score += 10
+    if with_weights:
+        model_path = Path(__file__).resolve().parent / f"{model_name}.th"
+        assert model_path.exists(), f"{model_path.name} not found"
 
-        trial_game = Game(game.get_fen())
-        trial_game.apply_move(move)
-        if trial_game.status == new_game.CHECK:
-            if trial_game.status != new_game.CHECKMATE:
-                score += 5
+        try:
+            m.load_state_dict(torch.load(model_path, map_location="cpu"))
+        except RuntimeError as e:
+            raise AssertionError(
+                f"Failed to load {model_path.name}, make sure the default model arguments are set correctly"
+            ) from e
 
-        center_squares = ["d4", "e4", "d5", "e5"]
-        if move[2:4] in center_squares:
-            score += 1
+    return m
 
-        if new_game.board.get_piece(Game.xy2i(move[2:4])) != ' ':
-            captured_piece = new_game.board.get_piece(Game.xy2i(move[2:4])).lower()
-            if captured_piece in ["n", "b"]:
-                score += 2
+def piece_moved(position1, position2):
+    affected_squares = []
+    for i in range(64):
+        if position1[i] != position2[i]:
+            affected_squares.append(i)
+    if len(affected_squares) > 2:
+        for square in affected_squares:
+            if position1[square] == 12 or position1[square] == 6:
+                moved_from = square
+            if position2[square] == 12 or position2[square] == 6:
+                moved_to = square
 
-        trial_game = Game(game.get_fen())
-        trial_game.apply_move(move)
-        if trial_game.status == new_game.CHECKMATE:
-            score += 100
-
-        # turn = False if game.get_fen().split()[1] == "w" else True
-        # board = chess.Board(game.get_fen())
-        # move_pos = chess.Move.from_uci(move)
-        # board.push(move_pos)
-        # if board.is_attacked_by(not turn, move_pos.to_square):
-        #     score -= self.piece_values[chess.piece_symbol(board.piece_type_at(move_pos.to_square))] / 2
-
-        return score
-
-    def order_moves(self, game, moves, en_passant_moves, castling_moves):
-        return sorted(moves, key=lambda move: self.evaluate_move_heuristics(game, move,
-                                                                            en_passant_moves, castling_moves), reverse=True)
-
-    def evaluate_board(self, game, castling_rights, en_passant_square):
-        score = 0
-
-        for i in range(64):
-            piece = game.board.get_piece(i)
-            if piece != ' ':
-                value = self.piece_values[piece.lower()]
-                if piece.isupper():
-                    score += value
-                else:
-                    score -= value
-
-        if "K" in castling_rights:
-            score += 0.5
-        if "Q" in castling_rights:
-            score += 0.5
-        if "k" in castling_rights:
-            score -= 0.5
-        if "q" in castling_rights:
-            score -= 0.5
-
-        if en_passant_square is not None:
-            score += 0.1 if game.get_fen().split()[1] == "w"  else -0.1
-        return score
-
-    def get_castling_moves(self, game, castling_rights):
-        moves = []
-        if "K" in castling_rights and "O-O" in game.get_moves():
-            moves.append("O-O")
-        if "Q" in castling_rights and "O-O-O" in game.get_moves():
-            moves.append("O-O-O")
-        if "k" in castling_rights and "O-O" in game.get_moves():
-            moves.append("O-O")
-        if "q" in castling_rights and "O-O-O" in game.get_moves():
-            moves.append("O-O-O")
-        return moves
-
-    def get_en_passant_moves(self, game, en_passant_square):
-        moves = []
-        if en_passant_square is not None:
-            for move in game.get_moves():
-                if move[2:4] == en_passant_square:
-                    moves.append(move)
-        return moves
-
-    def mini_max_value(self, game, depth, castling_rights, en_passant_square, maximizing_player):
-        alpha = float('-inf')
-        beta = float('inf')
-        if maximizing_player:
-            return self.max_value(game, depth, castling_rights, en_passant_square, alpha, beta)
+            if position1[square] == 0:
+                if position2[square] == 1:
+                    moved_to = square
+                    for square in affected_squares:
+                        if position1[square] == 1:
+                            moved_from = square
+                elif position2[square] == 7:
+                    moved_to = square
+                    for square in affected_squares:
+                        if position1[square] == 7:
+                            moved_from = square
+    else:
+        if position2[affected_squares[0]] == 0:
+            moved_from, moved_to = affected_squares[0], affected_squares[1]
         else:
-            return self.min_value(game, depth, castling_rights, en_passant_square, alpha, beta)
-
-
-    def min_value(self, game, depth, castling_rights, en_passant_square, alpha, beta):
-        if depth == 0 or game.status in {Game.CHECKMATE}:
-            return self.evaluate_board(game, castling_rights, en_passant_square), None
-
-        v = float('inf')
-        best_move = None
-
-        moves = list(game.get_moves())
-        castling_moves = self.get_castling_moves(game, castling_rights)
-        moves.extend(castling_moves)
-        en_passant_moves = self.get_en_passant_moves(game, en_passant_square)
-        moves.extend(en_passant_moves)
-        #moves = self.order_moves(game, moves, en_passant_moves, castling_moves)
-        try:
-            moves = random.sample(moves, 10)
-        except ValueError as e:
-            pass
-
-        for move in moves[:4]:
-            new_game = Game(game.get_fen())
-            new_game.apply_move(move)
-            new_score, _ = self.max_value(new_game, depth - 1, castling_rights, en_passant_square, alpha, beta)
-            if new_score < v:
-                v = new_score
-                best_move = move
-            if v <= alpha:
-                return v, best_move
-            beta = min(beta, v)
-
-        return v, best_move
-
-    def max_value(self, game, depth, castling_rights, en_passant_square, alpha, beta):
-        if depth == 0 or game.status in {Game.CHECKMATE}:
-            return self.evaluate_board(game, castling_rights, en_passant_square), None
-
-        v = float('-inf')
-        best_move = None
-
-        moves = list(game.get_moves())
-        castling_moves = self.get_castling_moves(game, castling_rights)
-        moves.extend(castling_moves)
-        en_passant_moves = self.get_en_passant_moves(game, en_passant_square)
-        moves.extend(en_passant_moves)
-        #moves = self.order_moves(game, moves, en_passant_moves, castling_moves)
-        try:
-            moves = random.sample(moves, 10)
-        except ValueError as e:
-            pass
-
-        for move in moves[:4]:
-            new_game = Game(game.get_fen())
-            new_game.apply_move(move)
-            new_score, _ = self.min_value(new_game, depth - 1, castling_rights, en_passant_square, alpha, beta)
-            if new_score > v:
-                v = new_score
-                best_move = move
-            if v >= beta:
-                return v, best_move
-            alpha = max(alpha, v)
-
-        return v, best_move
-
-    def get_castling_rights(self, fen):
-        fen_parts = fen.split()
-        castling_rights = fen_parts[2]
-        return set(castling_rights)
-
-    def get_en_passant_square(self, fen):
-        fen_parts = fen.split()
-        en_passant_square = fen_parts[3]
-        return en_passant_square if en_passant_square != "-" else None
-
-    def get_move(self, board, depth=4):
-        game = Game(board)
-        castling_rights = self.get_castling_rights(game.get_fen())
-        en_passant_square = self.get_en_passant_square(game.get_fen())
-        _, best_move = self.mini_max_value(game, depth, castling_rights, en_passant_square, game.get_fen().split()[1] == "w")
-        return best_move
+            moved_from, moved_to = affected_squares[1], affected_squares[0]
+    return moved_from, moved_to
 
 def chess_bot(observation):
-    try:
-        bot = ChessBot()
-        best_move = bot.get_move(observation.board, depth=2+1)
-        #print("hit here")
-        return best_move
-    except TimeoutError as e:
-        print("hit here", e)
-    # game = Game(observation.board)
-    # print(game.move_history)
-    # moves = list(game.get_moves())
-    #
-    # for move in moves[:10]:
-    #     g = Game(observation.board)
-    #     g.apply_move(move)
-    #     if g.status == Game.CHECKMATE:
-    #         return move
-    #
-    # for move in moves:
-    #     if game.board.get_piece(Game.xy2i(move[2:4])) != ' ':
-    #         return move
-    #
-    # for move in moves:
-    #     if 'q' in move.lower():
-    #         return move
-    #
-    # return random.choice(moves)
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        print("CUDA not available, using CPU")
+        device = torch.device("cpu")
+
+    game = Game(observation.board)
+    moves = list(game.get_moves())
+    board_position_one_hot_list = board_position_list_one_hot(chess.Board(observation.board))
+    board_position_list_input = torch.from_numpy(board_position_one_hot_list).permute(2, 0, 1).unsqueeze(0).to(device)
+    original_board_position_list = board_position_list(chess.Board(observation.board))
+    kwargs = {}
+
+    model = load_model(model_name="fide_google_chess_model_moved_from", with_weights=True, **kwargs)
+    model = model.to(device)
+    model.eval()
+
+    y_pred = torch.nn.functional.softmax(model(board_position_list_input))
+    _, move_from = torch.max(y_pred, 1)
+    print(move_from.item())
+
+    for move in moves:
+        g = Game(observation.board)
+        new_board = chess.Board(observation.board)
+        new_board.push(chess.Move.from_uci(move))
+        new_board_position_list = board_position_list(new_board)
+        piece_from, piece_to = piece_moved(original_board_position_list, new_board_position_list)
+        g.apply_move(move)
+        if g.status == Game.CHECKMATE:
+            return move
+
+    for move in moves:
+        if game.board.get_piece(Game.xy2i(move[2:4])) != ' ':
+            return move
+
+    for move in moves:
+        if 'q' in move.lower():
+            return move
+
+    return random.choice(moves)
+
+class Observation:
+    def __init__(self):
+        self.board = Game().get_fen()
+chess_bot(Observation())
