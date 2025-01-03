@@ -4,7 +4,8 @@ import chess
 import torch.nn as nn
 import torch
 from pathlib import Path
-import random
+import os
+
 
 class MoveModel(nn.Module):
     def __init__(self, input_size=768, hidden_size=1024, num_classes=64):
@@ -26,7 +27,8 @@ class MoveModel(nn.Module):
         return x
 
 MODEL_FACTORY = {
-    "fide_google_chess_model_moved_from": MoveModel
+    "fide_google_chess_model_moved_from": MoveModel,
+    "fide_google_chess_model_moved_to": MoveModel
 }
 
 def board_position_list(board):
@@ -55,7 +57,7 @@ def load_model(
     m = MODEL_FACTORY[model_name](**model_kwargs)
 
     if with_weights:
-        model_path = Path(__file__).resolve().parent / f"{model_name}.th"
+        model_path = Path(os.path.abspath('')).resolve() / f"{model_name}.th"
         assert model_path.exists(), f"{model_path.name} not found"
 
         try:
@@ -98,33 +100,11 @@ def piece_moved(position1, position2):
     return moved_from, moved_to
 
 def chess_bot(observation):
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        print("CUDA not available, using CPU")
-        device = torch.device("cpu")
-
     game = Game(observation.board)
     moves = list(game.get_moves())
-    board_position_one_hot_list = board_position_list_one_hot(chess.Board(observation.board))
-    board_position_list_input = torch.from_numpy(board_position_one_hot_list).permute(2, 0, 1).unsqueeze(0).to(device)
-    original_board_position_list = board_position_list(chess.Board(observation.board))
-    kwargs = {}
 
-    model = load_model(model_name="fide_google_chess_model_moved_from", with_weights=True, **kwargs)
-    model = model.to(device)
-    model.eval()
-
-    y_pred = torch.nn.functional.softmax(model(board_position_list_input))
-    _, move_from = torch.max(y_pred, 1)
-    print(move_from.item())
-
-    for move in moves:
+    for move in moves[:10]:
         g = Game(observation.board)
-        new_board = chess.Board(observation.board)
-        new_board.push(chess.Move.from_uci(move))
-        new_board_position_list = board_position_list(new_board)
-        piece_from, piece_to = piece_moved(original_board_position_list, new_board_position_list)
         g.apply_move(move)
         if g.status == Game.CHECKMATE:
             return move
@@ -137,9 +117,63 @@ def chess_bot(observation):
         if 'q' in move.lower():
             return move
 
-    return random.choice(moves)
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
-class Observation:
-    def __init__(self):
-        self.board = Game().get_fen()
-chess_bot(Observation())
+    game = Game(observation.board)
+    moves = list(game.get_moves())
+    board_position_one_hot_list = board_position_list_one_hot(chess.Board(observation.board))
+    board_position_list_input = torch.from_numpy(board_position_one_hot_list).permute(2, 0, 1).unsqueeze(0).to(device)
+    original_board_position_list = board_position_list(chess.Board(observation.board))
+    kwargs = {}
+
+    model_moved_from = load_model(model_name="fide_google_chess_model_moved_from", with_weights=True, **kwargs)
+    model_moved_from = model_moved_from.to(device)
+    model_moved_from.eval()
+
+    y_pred = torch.nn.functional.softmax(model_moved_from(board_position_list_input))
+    _, move_from = torch.max(y_pred, 1)
+
+    model_moved_to = load_model(model_name="fide_google_chess_model_moved_to", with_weights=True, **kwargs)
+    model_moved_to = model_moved_to.to(device)
+    model_moved_to.eval()
+
+    y_pred = torch.nn.functional.softmax(model_moved_to(board_position_list_input))
+    _, moved_to = torch.max(y_pred, 1)
+    piece_moved_pair = (move_from.item(), moved_to.item())
+
+    res = float('inf')
+    res_move = None
+    for move in moves:
+        # g = Game(observation.board)
+        new_board = chess.Board(observation.board)
+        new_board.push(chess.Move.from_uci(move))
+        new_board_position_list = board_position_list(new_board)
+        piece_from, piece_to = piece_moved(original_board_position_list, new_board_position_list)
+        diff = abs(piece_from - piece_moved_pair[0]) + abs(piece_to - piece_moved_pair[1])
+
+        if res > diff:
+            res = diff
+            res_move = move
+
+        # g.apply_move(move)
+        # if g.status == Game.CHECKMATE:
+        #     return move
+
+    # for move in moves:
+    #     if game.board.get_piece(Game.xy2i(move[2:4])) != ' ':
+    #         return move
+    #
+    # for move in moves:
+    #     if 'q' in move.lower():
+    #         return move
+
+    # return random.choice(moves)
+    return res_move
+
+# class Observation:
+#     def __init__(self):
+#         self.board = Game().get_fen()
+# chess_bot(Observation())
