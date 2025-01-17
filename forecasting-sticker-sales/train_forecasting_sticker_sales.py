@@ -137,7 +137,7 @@ def train(
                 y = y.to(device)
                 y_pred = model(X)
                 loss = loss_func(y_pred, y)
-                metrics["val_loss"] += loss.item()
+                metrics["val_loss"] += loss.item() * len(X)
 
         epoch_train_rmse_loss = torch.sqrt(torch.as_tensor(metrics["train_loss"] / len(train_loader.dataset)))
         epoch_val_rmse_loss = torch.sqrt(torch.as_tensor(metrics["val_loss"] / len(val_loader.dataset)))

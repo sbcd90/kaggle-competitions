@@ -5,9 +5,9 @@ from pathlib import Path
 class ForecastingStickerSalesModel(nn.Module):
     def __init__(self, num_features):
         super().__init__()
-        self.fc1 = nn.Linear(num_features, 256)
-        self.fc2 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 1)
+        self.fc1 = nn.Linear(num_features, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc4 = nn.Linear(64, 1)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(0.3)
 
@@ -15,7 +15,7 @@ class ForecastingStickerSalesModel(nn.Module):
         x = self.relu(self.fc1(x))
         x = self.dropout(x)
         x = self.relu(self.fc2(x))
-        x = self.dropout(x)
+        #x = self.dropout(x)
         x = self.fc4(x)
         return x
 
