@@ -139,11 +139,8 @@ def train(
                 loss = loss_func(y_pred, y)
                 metrics["val_loss"] += loss.item() * len(X)
 
-        metrics["train_loss"] /= len(train_loader.dataset)
-        metrics["val_loss"] /= len(val_loader.dataset)
-
-        epoch_train_rmse_loss = torch.sqrt(torch.as_tensor(metrics["train_loss"] / len(train_loader.dataset)))
-        epoch_val_rmse_loss = torch.sqrt(torch.as_tensor(metrics["val_loss"] / len(val_loader.dataset)))
+        epoch_train_rmse_loss = torch.as_tensor(metrics["train_loss"] / len(train_loader.dataset))
+        epoch_val_rmse_loss = torch.as_tensor(metrics["val_loss"] / len(val_loader.dataset))
         expr_lr_scheduler.step(metrics=epoch_val_rmse_loss)
 
         current_lr = optimizer.param_groups[0]['lr']
