@@ -126,7 +126,7 @@ def train(
             y_pred = model(X)
 
             loss = loss_func(y_pred, y)
-            metrics["train_loss"] += loss.item()
+            metrics["train_loss"] += loss.item() * len(X)
 
             loss.backward()
             optimizer.step()
@@ -138,6 +138,9 @@ def train(
                 y_pred = model(X)
                 loss = loss_func(y_pred, y)
                 metrics["val_loss"] += loss.item() * len(X)
+
+        metrics["train_loss"] /= len(train_loader.dataset)
+        metrics["val_loss"] /= len(val_loader.dataset)
 
         epoch_train_rmse_loss = torch.sqrt(torch.as_tensor(metrics["train_loss"] / len(train_loader.dataset)))
         epoch_val_rmse_loss = torch.sqrt(torch.as_tensor(metrics["val_loss"] / len(val_loader.dataset)))
