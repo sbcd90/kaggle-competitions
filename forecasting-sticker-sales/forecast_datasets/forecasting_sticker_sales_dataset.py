@@ -12,7 +12,7 @@ class ForecastStickerSalesDataset(Dataset):
             self.y = None
         else:
             self.X = torch.tensor(X_input.values, dtype=torch.float32)
-            self.y = torch.tensor(y_input, dtype=torch.float32)
+            self.y = torch.tensor(y_input, dtype=torch.float32).view(-1, 1)
 
     def __len__(self):
         return len(self.X)
