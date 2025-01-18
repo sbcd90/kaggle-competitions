@@ -57,6 +57,7 @@ def check_holiday(row):
     date = row['date']
     return 1 if date in holidays[country].values else 0
 
+# python3 train_forecasting_sticker_sales.py --num_epoch 200 --model_name forecasting_sticker_sales --train True --lr=0.001 --batch_size=64
 def train(
         model_name: str = "forecasting_sticker_sales",
         num_epoch: int = 50,
