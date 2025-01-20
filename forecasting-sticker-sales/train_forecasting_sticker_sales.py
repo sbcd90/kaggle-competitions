@@ -18,10 +18,6 @@ def transform_datetime(df: pd.DataFrame):
     df["day_of_week"] = df["date"].dt.dayofweek
     df["week_of_year"] = df["date"].dt.isocalendar().week
     df["quarter"] = df["date"].dt.quarter
-    df["day_sin"] = np.sin(2 * np.pi * df["day"] / 30)
-    df["day_cos"] = np.cos(2 * np.pi * df["day"] / 30)
-    df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
-    df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
     return df
 
 def get_season(month):
@@ -80,9 +76,9 @@ def train(
     train_data["num_sold"] = train_data["num_sold"].fillna(0)
     train_data = transform_datetime(train_data)
     train_data["season"] = train_data["month"].apply(get_season)
-    # train_data["is_holiday"] = train_data.apply(check_holiday, axis=1)
+    #train_data["is_holiday"] = train_data.apply(check_holiday, axis=1)
 
-    categorical_cols = ["country", "store", "product", "season"]
+    categorical_cols = ["country", "store", "product", "season", "year", "month", "day_of_week", "quarter"]
     label_encoders = {col: LabelEncoder() for col in categorical_cols}
 
     for col in categorical_cols:
@@ -90,7 +86,7 @@ def train(
     with open("label_encoders.pkl", "wb") as f:
         pickle.dump(label_encoders, f)
 
-    numerical_cols = ["month", "year", "day", "day_of_week", "week_of_year", "quarter", "day_sin", "day_cos", "month_sin", "month_cos"]
+    numerical_cols = ["day", "week_of_year"]
     scaler = StandardScaler()
 
     train_data[numerical_cols] = scaler.fit_transform(train_data[numerical_cols])
