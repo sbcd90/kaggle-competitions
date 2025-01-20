@@ -78,7 +78,7 @@ def train(
     train_data["season"] = train_data["month"].apply(get_season)
     #train_data["is_holiday"] = train_data.apply(check_holiday, axis=1)
 
-    categorical_cols = ["country", "store", "product", "season", "year", "month", "day_of_week", "quarter"]
+    categorical_cols = ["country", "store", "product", "season", "month", "day_of_week", "quarter"]
     label_encoders = {col: LabelEncoder() for col in categorical_cols}
 
     for col in categorical_cols:
@@ -86,7 +86,7 @@ def train(
     with open("label_encoders.pkl", "wb") as f:
         pickle.dump(label_encoders, f)
 
-    numerical_cols = ["day", "week_of_year"]
+    numerical_cols = ["day", "week_of_year", "year"]
     scaler = StandardScaler()
 
     train_data[numerical_cols] = scaler.fit_transform(train_data[numerical_cols])
@@ -168,14 +168,14 @@ def test(
     test_data = transform_datetime(test_data)
     test_data["season"] = test_data["month"].apply(get_season)
 
-    categorical_cols = ["country", "store", "product", "season"]
+    categorical_cols = ["country", "store", "product", "season", "month", "day_of_week", "quarter"]
     with open("label_encoders.pkl", "rb") as f:
         label_encoders = pickle.load(f)
 
     for col in categorical_cols:
         test_data[col] = label_encoders[col].transform(test_data[col].astype(str))
 
-    numerical_cols = ["month", "year", "day", "day_of_week", "week_of_year", "quarter", "day_sin", "day_cos", "month_sin", "month_cos"]
+    numerical_cols = ["day", "week_of_year"]
     scaler = StandardScaler()
     test_data[numerical_cols] = scaler.fit_transform(test_data[numerical_cols])
 
