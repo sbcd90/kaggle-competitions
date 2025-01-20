@@ -8,7 +8,7 @@ class ForecastStickerSalesDataset(Dataset):
                  X_input: pd.DataFrame,
                  y_input: pd.DataFrame):
         if y_input is None:
-            self.X = torch.tensor(X_input, dtype=torch.float32)
+            self.X = torch.tensor(X_input.values, dtype=torch.float32)
             self.y = None
         else:
             self.X = torch.tensor(X_input.values, dtype=torch.float32)

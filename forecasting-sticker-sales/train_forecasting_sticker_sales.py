@@ -57,7 +57,7 @@ def check_holiday(row):
     date = row['date']
     return 1 if date in holidays[country].values else 0
 
-# python3 train_forecasting_sticker_sales.py --num_epoch 200 --model_name forecasting_sticker_sales --train True --lr=0.001 --batch_size=64
+# python3 train_forecasting_sticker_sales.py --num_epoch 200 --model_name forecasting_sticker_sales --train True --lr=0.01 --batch_size=64
 def train(
         model_name: str = "forecasting_sticker_sales",
         num_epoch: int = 50,
@@ -154,6 +154,60 @@ def train(
 
     save_model(model)
 
+def test(
+        model_name: str = "forecasting_sticker_sales",
+        batch_size: int = 32,
+        seed: int = 2025,
+):
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        print("CUDA is not available. Using CPU instead.")
+        device = torch.device("cpu")
+
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    test_data = pd.read_csv("data/test.csv")
+    test_data = transform_datetime(test_data)
+    test_data["season"] = test_data["month"].apply(get_season)
+
+    categorical_cols = ["country", "store", "product", "season"]
+    with open("label_encoders.pkl", "rb") as f:
+        label_encoders = pickle.load(f)
+
+    for col in categorical_cols:
+        test_data[col] = label_encoders[col].transform(test_data[col].astype(str))
+
+    numerical_cols = ["month", "year", "day", "day_of_week", "week_of_year", "quarter", "day_sin", "day_cos", "month_sin", "month_cos"]
+    scaler = StandardScaler()
+    test_data[numerical_cols] = scaler.fit_transform(test_data[numerical_cols])
+
+    X_test = test_data.drop(columns=["id", "date"])
+    y_test = test_data["id"].values
+
+    test_dataset = ForecastStickerSalesDataset(X_test, y_test)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    model = load_model(model_name, with_weights=True, num_features=X_test.shape[1])
+    model = model.to(device)
+    model.eval()
+
+    ids = []
+    predictions = []
+    with torch.inference_mode():
+        for X, id in test_loader:
+            X = X.to(device)
+            id = id.flatten()
+            ids.extend(id.tolist())
+
+            out = model(X)
+            predictions.extend(out.cpu().numpy().tolist())
+    ids = list(map(lambda x: int(x), ids))
+    predictions = list(map(lambda x: round(x[0]), predictions))
+    submission = pd.DataFrame({"id": ids, "num_sold": predictions})
+    submission.to_csv("submission.csv", index=False)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -173,5 +227,4 @@ if __name__ == "__main__":
         # pass all arguments to train
         train(**args)
     else:
-        pass
-        #test(args["model_name"], args["batch_size"])
+        test(args["model_name"], args["batch_size"], args["seed"])
