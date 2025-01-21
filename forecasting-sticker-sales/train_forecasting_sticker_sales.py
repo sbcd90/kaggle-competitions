@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import pandas as pd
 import argparse
+import holidays
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
@@ -30,28 +31,11 @@ def get_season(month):
     else:
         return "Autumn"
 
-def get_holidays():
-    return {
-        'Kenya': pd.date_range(start='2010-01-01', end='2030-12-31', freq='B').append(
-            pd.to_datetime(['2023-04-07', '2023-04-09', '2023-05-01', '2023-06-01', '2023-10-10', '2023-12-12'])),
-        'Canada': pd.date_range(start='2010-01-01', end='2030-12-31', freq='B').append(pd.to_datetime(
-            ['2023-02-20', '2023-04-14', '2023-05-22', '2023-07-01', '2023-09-04', '2023-10-09', '2023-12-25'])),
-        'Finland': pd.date_range(start='2010-01-01', end='2030-12-31', freq='B').append(
-            pd.to_datetime(['2023-01-06', '2023-04-14', '2023-05-01', '2023-06-24', '2023-12-06', '2023-12-25'])),
-        'Norway': pd.date_range(start='2010-01-01', end='2030-12-31', freq='B').append(
-            pd.to_datetime(['2023-05-01', '2023-05-17', '2023-12-25', '2023-12-26'])),
-        'Singapore': pd.date_range(start='2010-01-01', end='2030-12-31', freq='B').append(
-            pd.to_datetime(['2023-01-22', '2023-04-07', '2023-06-05', '2023-08-09', '2023-11-12', '2023-12-25'])),
-        'Italy': pd.date_range(start='2010-01-01', end='2030-12-31', freq='B').append(pd.to_datetime(
-            ['2023-01-06', '2023-04-25', '2023-05-01', '2023-06-02', '2023-08-15', '2023-11-01', '2023-12-08',
-             '2023-12-25']))
-    }
-
 def check_holiday(row):
-    holidays = get_holidays()
     country = row['country']
     date = row['date']
-    return 1 if date in holidays[country].values else 0
+    country_holidays = holidays.CountryHoliday(country)
+    return country_holidays.get(date) is not None
 
 # python3 train_forecasting_sticker_sales.py --num_epoch 200 --model_name forecasting_sticker_sales --train True --lr=0.01 --batch_size=64
 def train(
@@ -76,9 +60,9 @@ def train(
     train_data["num_sold"] = train_data["num_sold"].fillna(0)
     train_data = transform_datetime(train_data)
     train_data["season"] = train_data["month"].apply(get_season)
-    #train_data["is_holiday"] = train_data.apply(check_holiday, axis=1)
+    train_data["is_holiday"] = train_data.apply(check_holiday, axis=1)
 
-    categorical_cols = ["country", "store", "product", "season", "month", "day_of_week", "quarter"]
+    categorical_cols = ["country", "store", "product", "season", "month", "day_of_week", "quarter", "day", "week_of_year", "is_holiday"]
     label_encoders = {col: LabelEncoder() for col in categorical_cols}
 
     for col in categorical_cols:
@@ -86,7 +70,7 @@ def train(
     with open("label_encoders.pkl", "wb") as f:
         pickle.dump(label_encoders, f)
 
-    numerical_cols = ["day", "week_of_year", "year"]
+    numerical_cols = ["year"]
     scaler = StandardScaler()
 
     train_data[numerical_cols] = scaler.fit_transform(train_data[numerical_cols])
@@ -167,15 +151,16 @@ def test(
     test_data = pd.read_csv("data/test.csv")
     test_data = transform_datetime(test_data)
     test_data["season"] = test_data["month"].apply(get_season)
+    test_data["is_holiday"] = test_data.apply(check_holiday, axis=1)
 
-    categorical_cols = ["country", "store", "product", "season", "month", "day_of_week", "quarter"]
+    categorical_cols = ["country", "store", "product", "season", "month", "day_of_week", "quarter", "day", "week_of_year", "is_holiday"]
     with open("label_encoders.pkl", "rb") as f:
         label_encoders = pickle.load(f)
 
     for col in categorical_cols:
         test_data[col] = label_encoders[col].transform(test_data[col].astype(str))
 
-    numerical_cols = ["day", "week_of_year"]
+    numerical_cols = ["year"]
     scaler = StandardScaler()
     test_data[numerical_cols] = scaler.fit_transform(test_data[numerical_cols])
 
