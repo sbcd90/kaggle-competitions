@@ -175,7 +175,7 @@ def test(
     for col in categorical_cols:
         test_data[col] = label_encoders[col].transform(test_data[col].astype(str))
 
-    numerical_cols = ["day", "week_of_year"]
+    numerical_cols = ["day", "week_of_year", "year"]
     scaler = StandardScaler()
     test_data[numerical_cols] = scaler.fit_transform(test_data[numerical_cols])
 
