@@ -77,9 +77,9 @@ def train(
                 out = model(images)
                 loss = loss_func(out, masks.long())
                 metrics["val_loss"] += loss.item()
-            print(f"Epoch {epoch}: Training loss: {metrics['training_loss'] / len(train_loader)}, "
-                  f"Validation loss: {metrics['val_loss'] / len(val_loader)}")
-            exp_lr_scheduler.step(metrics["val_loss"] / len(val_loader))
+        print(f"Epoch {epoch}: Training loss: {metrics['training_loss'] / len(train_loader)}, "
+              f"Validation loss: {metrics['val_loss'] / len(val_loader)}")
+        exp_lr_scheduler.step(metrics["val_loss"] / len(val_loader))
     save_model(model)
 
 
