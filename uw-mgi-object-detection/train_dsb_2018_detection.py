@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 from sklearn.model_selection import train_test_split
 
-from datasets.gi_tract_dataset import GiTractDataset
+from datasets.dsb_2018_dataset import GiTractDataset
 from models import load_model, save_model
 
 
@@ -35,6 +35,9 @@ def train(
     train_df, val_df = train_test_split(input_df, test_size=0.2, random_state=seed)
     train_df["class_id"] = pd.Categorical(train_df["class"]).codes
     val_df["class_id"] = pd.Categorical(val_df["class"]).codes
+
+    train_df = train_df[:100]
+    val_df = val_df[:100]
 
     train_dataset = GiTractDataset(train_df, DATA_DIR)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
