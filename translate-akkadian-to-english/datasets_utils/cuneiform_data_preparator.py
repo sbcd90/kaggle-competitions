@@ -55,7 +55,7 @@ def load_and_generate_akkadian_text_file(akkadian_text_file: str, lexicon):
         cleaned_text = clean_akkadian_translit(row)
         final = normalize_with_lexicon(cleaned_text, lexicon)
         final_texts.append(final)
-    with open("../data/akkadian_output.txt", "w", encoding="utf-8") as f:
+    with open("../data/akkadian_output_test.txt", "w", encoding="utf-8") as f:
         for line in final_texts:
             f.write(line.strip() + "\n")
 
@@ -189,10 +189,12 @@ def clean_akkadian_translit(text: str) -> str:
     return s
 
 def main():
-    akkadian_csv_file = "../data/train.csv"
+    is_test = True
+    akkadian_csv_file = "../data/test.csv"
     lexicon = load_lexicon("../data/OA_Lexicon_eBL.csv")
     load_and_generate_akkadian_text_file(akkadian_csv_file, lexicon)
-    load_and_generate_english_text_file(akkadian_csv_file)
+    if not is_test:
+        load_and_generate_english_text_file(akkadian_csv_file)
     # text = "KIŠIB ma-nu-ba-lúm-a-šur DUMU ṣí-lá-(d)IM KIŠIB šu-(d)EN.LÍL DUMU ma-nu-ki-a-šur KIŠIB MAN-a-šur DUMU a-ta-a 0.33333 ma-na 2 GÍN KÙ.BABBAR SIG₅ i-ṣé-er PUZUR₄-a-šur DUMU a-ta-a a-lá-ḫu-um i-šu iš-tù ḫa-muš-tim ša ì-lí-dan ITU.KAM ša ke-na-tim li-mu-um e-na-sú-in a-na ITU 14 ḫa-am-ša-tim i-ša-qal šu-ma lá iš-qú-ul 1.5 GÍN.TA a-na 1 ma-na-im i-na ITU.1.KAM ṣí-ib-tám ú-ṣa-áb"
     # cleaned_text = clean_akkadian_translit(text)
     # final = normalize_with_lexicon(cleaned_text, lexicon)

@@ -11,7 +11,7 @@ BOS_ID = 2
 EOS_ID = 3
 
 class AkkadianDataset(Dataset):
-    def __init__(self, src_file, tgt_file, src_spm_path, tgt_spm_path, max_len=128):
+    def __init__(self, src_file, tgt_file, src_spm_path, tgt_spm_path, max_len=64):
         self.src_lines = open(src_file, "r", encoding="utf-8").read().splitlines()
         self.tgt_lines = open(tgt_file, "r", encoding="utf-8").read().splitlines()
         assert len(self.src_lines) == len(self.tgt_lines)
@@ -55,7 +55,7 @@ def collate_fn(batch):
     return src_padded, tgt_padded
 
 class AkkadianPretrainedDataset(Dataset):
-    def __init__(self, src_texts: List[str], tgt_texts: List[str], tokenizer, max_len=128):
+    def __init__(self, src_texts: List[str], tgt_texts: List[str], tokenizer, max_len=64):
         self.src_texts = src_texts
         self.tgt_texts = tgt_texts
         self.tokenizer = tokenizer

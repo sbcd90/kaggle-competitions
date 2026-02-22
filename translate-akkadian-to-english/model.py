@@ -4,7 +4,7 @@ import torch.nn as nn
 from pathlib import Path
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=5000):
+    def __init__(self, d_model, max_len=64):
         super().__init__()
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1)
@@ -28,7 +28,7 @@ class TransformerAkToEngModel(nn.Module):
         num_decoder_layers=6,
         dim_feedforward=2048,
         dropout=0.1,
-        max_len=512,
+        max_len=64,
         pad_id=0
      ):
          super().__init__()

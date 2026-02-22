@@ -1,15 +1,17 @@
 import math
 import argparse
+import os
+import random
 
 import pandas as pd
 import numpy as np
-import sacrebleu
 import torch
 from torch.utils.data import DataLoader
 from transformers import (
     AutoTokenizer,
     AutoModelForSeq2SeqLM,
 )
+from sacrebleu_replacement_api import corpus_bleu, corpus_chrf
 
 from datasets_utils.akkadian_dataset import AkkadianPretrainedDataset, data_collator
 
@@ -22,13 +24,13 @@ def score(solution: pd.DataFrame, submission: pd.DataFrame, row_id_column_name: 
     references = solution[text_column_name].astype(str).tolist()
     hypotheses = submission[text_column_name].astype(str).tolist()
 
-    bleu = sacrebleu.corpus_bleu(hypotheses, [references])
-    chrf = sacrebleu.corpus_chrf(hypotheses, [references], word_order=2)
+    bleu = corpus_bleu(hypotheses, [references])
+    chrf = corpus_chrf(hypotheses, [references], word_order=2)
 
     return math.sqrt(bleu.score * chrf.score)
 
 @torch.no_grad()
-def evaluate(model, tokenizer, dataloader, device, num_beams=5, max_gen_len=128):
+def evaluate(model, tokenizer, dataloader, device, num_beams=5, max_gen_len=64):
     model.eval()
 
     hyps, refs = [], []
@@ -44,12 +46,22 @@ def evaluate(model, tokenizer, dataloader, device, num_beams=5, max_gen_len=128)
             early_stopping=True,
         )
 
-        pred_texts = tokenizer.batch_decode(generated, skip_special_tokens=True)
+        try:
+            pred_texts = tokenizer.batch_decode(generated, skip_special_tokens=True)
+        except OverflowError as e:
+            print("OverflowError during prediction decoding:", e)
+            pred_texts = [""] * generated.size(0)
 
         # IMPORTANT: labels contain -100 from collator -> fix before decoding
         #labels = batch["labels"].clone()
         #labels[labels == -100] = tokenizer.pad_token_id
-        gold_texts = tokenizer.batch_decode(batch["labels"], skip_special_tokens=True)
+        labels = batch["labels"].clone()
+        labels[labels == -100] = tokenizer.pad_token_id
+        try:
+            gold_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        except OverflowError as e:
+            print("OverflowError during gold decoding:", e)
+            gold_texts = [""] * labels.size(0)
 
         hyps.extend([x.strip() for x in pred_texts])
         refs.extend([x.strip() for x in gold_texts])
@@ -58,10 +70,82 @@ def evaluate(model, tokenizer, dataloader, device, num_beams=5, max_gen_len=128)
     submission = pd.DataFrame({"id": list(range(len(hyps))), "text": hyps})
 
     metric_value = score(solution, submission, "id", "text")
-    bleu = sacrebleu.corpus_bleu(hyps, [refs]).score
-    chrf = sacrebleu.corpus_chrf(hyps, [refs], word_order=2).score
+    bleu = corpus_bleu(hyps, [refs]).score
+    chrf = corpus_chrf(hyps, [refs], word_order=2).score
 
     return metric_value, bleu, chrf
+
+@torch.no_grad()
+def test(model, tokenizer, dataloader, device, num_beams=5, max_gen_len=64, print_samples=10):
+    model.eval()
+    hyps, refs = [], []
+
+    for batch in dataloader:
+        batch = {k: v.to(device) for k, v in batch.items()}
+
+        generated = model.generate(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            num_beams=num_beams,
+            max_length=max_gen_len,
+            early_stopping=True,
+        )
+
+        try:
+            pred_texts = tokenizer.batch_decode(generated, skip_special_tokens=True)
+        except OverflowError as e:
+            print("OverflowError during prediction decoding:", e)
+            pred_texts = [""] * generated.size(0)
+
+        # IMPORTANT: labels contain -100 from collator -> fix before decoding
+        # labels = batch["labels"].clone()
+        # labels[labels == -100] = tokenizer.pad_token_id
+        labels = batch["labels"].clone()
+        labels[labels == -100] = tokenizer.pad_token_id
+        try:
+            gold_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        except OverflowError as e:
+            print("OverflowError during gold decoding:", e)
+            gold_texts = [""] * labels.size(0)
+
+        hyps.extend([x.strip() for x in pred_texts])
+        refs.extend([x.strip() for x in gold_texts])
+
+    print("\n=== Sample Predictions ===\n")
+    for i, (hyp, ref) in enumerate(zip(hyps, refs)):
+        if i >= print_samples:
+            break
+
+        print(f"Example {i + 1}")
+        print(f"REF: {ref}")
+        print(f"HYP: {hyp}")
+        print("-" * 50)
+
+def train_val_test_split(src_lines, tgt_lines, seed):
+    assert len(src_lines) == len(tgt_lines), "Source/Target line counts differ!"
+
+    data = list(zip(src_lines, tgt_lines))
+    random.seed(seed)
+    random.shuffle(data)
+
+    src_lines, tgt_lines = zip(*data)
+
+    n = len(src_lines)
+    train_end = int(n * 0.8)
+    val_end = int(n * 0.9)
+
+    train_src = src_lines[:train_end]
+    train_tgt = tgt_lines[:train_end]
+
+    val_src = src_lines[train_end:val_end]
+    val_tgt = tgt_lines[train_end:val_end]
+
+    test_src = src_lines[val_end:]
+    test_tgt = tgt_lines[val_end:]
+
+    return (
+        train_src, train_tgt, val_src, val_tgt, test_src, test_tgt,
+    )
 
 def train(
     model_name: str="translate_akkadian_to_english_pretrained",
@@ -91,9 +175,7 @@ def train(
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     model.to(device)
 
-    split = int(0.8 * len(src_lines))
-    train_src, val_src = src_lines[:split], src_lines[split:]
-    train_tgt, val_tgt = tgt_lines[:split], tgt_lines[split:]
+    train_src, train_tgt, val_src, val_tgt, test_src, test_tgt = train_val_test_split(src_lines, tgt_lines, seed)
 
     train_dataset = AkkadianPretrainedDataset(train_src, train_tgt, tokenizer=tokenizer)
     val_dataset = AkkadianPretrainedDataset(val_src, val_tgt, tokenizer=tokenizer)
@@ -104,6 +186,8 @@ def train(
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
+    out_dir = "models"
+    best_metric = -1.0
     for epoch in range(num_epoch):
         model.train()
         total_loss = 0.0
@@ -128,6 +212,24 @@ def train(
         print(f"Train Loss: {avg_loss:.4f}")
         print(f"VAL Metric sqrt(BLEU*CHRF): {metric_value:.2f}")
         print(f"VAL BLEU: {bleu:.2f} | VAL CHRF++: {chrf:.2f}")
+
+        if metric_value > best_metric:
+            best_metric = metric_value
+            save_path = os.path.join(out_dir, "best")
+            model.save_pretrained(save_path)
+            tokenizer.save_pretrained(save_path)
+            print(f"Saved new best model to: {save_path} (Metric={best_metric:.2f})")
+
+    print("Start testing....")
+    model_dir = os.path.join(out_dir, "best")
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_dir)
+    model.to(device)
+    model.eval()
+
+    test_dataset = AkkadianPretrainedDataset(test_src, test_tgt, tokenizer=tokenizer)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator)
+    test(model, tokenizer, test_loader, device)
 
 # class ParticipantVisibleError(Exception):
 #     pass
@@ -338,13 +440,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--num_epoch", type=int, default=100)
+    parser.add_argument("--num_epoch", type=int, default=24)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--seed", type=int, default=2026)
 
     # optional: additional model hyperparamters
     # parser.add_argument("--num_layers", type=int, default=3)
-    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--train", type=bool, default=False)
 

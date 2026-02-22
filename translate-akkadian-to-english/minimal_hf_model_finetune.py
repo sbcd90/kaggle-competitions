@@ -32,7 +32,7 @@ def score(solution: pd.DataFrame, submission: pd.DataFrame, row_id_column_name: 
 # Tiny dataset
 # -------------------------
 class MyDataset(Dataset):
-    def __init__(self, src_texts, tgt_texts, tokenizer, max_len=128):
+    def __init__(self, src_texts, tgt_texts, tokenizer, max_len=64):
         self.src_texts = src_texts
         self.tgt_texts = tgt_texts
         self.tokenizer = tokenizer
