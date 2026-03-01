@@ -167,8 +167,8 @@ def train(
 
     src_file = "data/akkadian_output.txt"
     tgt_file = "data/english_output.txt"
-    src_lines = open(src_file, "r", encoding="utf-8").read().splitlines()
-    tgt_lines = open(tgt_file, "r", encoding="utf-8").read().splitlines()
+    src_lines = open(src_file, "r", encoding="utf-8").read().splitlines()[:128]
+    tgt_lines = open(tgt_file, "r", encoding="utf-8").read().splitlines()[:128]
     assert len(src_lines) == len(tgt_lines), "Source/Target line counts differ!"
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
