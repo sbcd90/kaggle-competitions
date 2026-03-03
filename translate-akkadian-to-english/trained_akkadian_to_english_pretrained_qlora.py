@@ -163,7 +163,7 @@ def train(
     np.random.seed(seed)
 
     src_file = "data/akkadian_output.txt"
-    tgt_file = "data/akkadian_output.txt"
+    tgt_file = "data/english_output.txt"
     src_lines = open(src_file, "r", encoding="utf-8").read().splitlines()[:1024]
     tgt_lines = open(tgt_file, "r", encoding="utf-8").read().splitlines()[:1024]
     assert len(src_lines) == len(tgt_lines), "Source/Target line counts differ!"
@@ -249,7 +249,7 @@ def test(
     np.random.seed(seed)
 
     src_file = "data/akkadian_output.txt"
-    tgt_file = "data/akkadian_output.txt"
+    tgt_file = "data/english_output.txt"
     src_lines = open(src_file, "r", encoding="utf-8").read().splitlines()[:1024]
     tgt_lines = open(tgt_file, "r", encoding="utf-8").read().splitlines()[:1024]
     assert len(src_lines) == len(tgt_lines), "Source/Target line counts differ!"
