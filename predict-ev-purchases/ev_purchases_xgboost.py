@@ -3,17 +3,16 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score
-from sklearn.preprocessing import TargetEncoder
 import warnings, gc
+from sklearn.preprocessing import OrdinalEncoder, TargetEncoder
+
 warnings.filterwarnings("ignore")
 
 train = pd.read_csv("data/train.csv")
 test = pd.read_csv("data/test.csv")
-orig = pd.read_csv("original/EV_Adoption_and_Range_Anxiety_Dataset.csv")
 
 TARGET = "Will_Buy_EV"
 train[TARGET] = train[TARGET].map({"Yes":1, "No":0})
-orig[TARGET] = orig[TARGET].map({"Yes":1, "No":0})
 
 print(f"Train: {train.shape}, Test: {test.shape}")
 print(f"Columns: {list(train.columns)}")
@@ -30,11 +29,6 @@ num_cols = [c for c in combined.columns if c not in cat_cols + ["id", "is_train"
 
 print(f"Categorical: {cat_cols}")
 print(f"Numerical: {num_cols}")
-
-print("Extracting 8 digit levels...")
-for c in num_cols:
-    for k in [-1, 0, 1, 2, 3, 4, 5, 6]:
-        combined[f"{c}_d{k}"] = (combined[c].fillna(0) // (10**k) % 10).astype("int8")
 
 print("Adding CTGAN artifact flags...")
 combined["is_30k_spike"] = (combined["Annual_Income_USD"] == 30000.0).astype("int8")
@@ -56,15 +50,6 @@ combined['commute10'] = np.floor(combined['Daily_Commute_km'] / 10.0).astype(str
 combined['age_int'] = np.floor(combined['Age']).astype(str)
 smooth_cats = ['income_int', 'income100', 'income1000', 'commute_int', 'commute10', 'age_int']
 
-print("Mapping original dataset means + std...")
-orig_mean = orig[TARGET].mean()
-for col in cat_cols:
-    if col in orig.columns:
-        stats = orig.groupby(col, observed=False)[TARGET].mean()
-        combined[f"{col}_org_mean"] = combined[col].map(stats).fillna(orig_mean).astype("float32")
-        stats_std = orig.groupby(col, observed=False)[TARGET].std()
-        combined[f"{col}_org_std"] = combined[col].map(stats_std).fillna(0).astype("float32")
-
 print("Frequency + Count encoding...")
 all_te_cols = cat_cols + smooth_cats
 for col in all_te_cols:
@@ -77,7 +62,7 @@ train_df = combined[combined['is_train'] == 1].drop(columns=['is_train']).reset_
 test_df = combined[combined['is_train'] == 0].drop(columns=['is_train', TARGET]).reset_index(drop=True)
 del combined; gc.collect()
 
-eval_cols = [c for c in train_df.columns if c not in ['id', TARGET] and pd.api.types.is_numeric_dtype(train_df[c])]
+eval_cols = [c for c in train_df.columns if c not in ["id", TARGET] and pd.api.types.is_numeric_dtype(train_df[c])]
 corr = train_df[eval_cols].corr().abs()
 upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
 drop_corr = [c for c in upper.columns if any(upper[c] == 1.0)]
@@ -115,6 +100,21 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(X, y), 1):
     y_val = y.iloc[val_idx]
     X_te = X_test.copy()
 
+    # oe = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+    # oe.fit(X_train[TE_COLS])
+    #
+    # encoder_train = oe.transform(X_train[TE_COLS])
+    # encoder_val = oe.transform(X_val[TE_COLS])
+    # encoder_test = oe.transform(X_te[TE_COLS])
+    #
+    # for i, col in enumerate(TE_COLS):
+    #     X_train[f"{col}_ENC"] = encoder_train[:, i].astype('float32')
+    #     X_val[f"{col}_ENC"] = encoder_val[:, i].astype('float32')
+    #     X_te[f"{col}_ENC"] = encoder_test[:, i].astype('float32')
+    #
+    #     X_train.drop(columns=[col], inplace=True)
+    #     X_val.drop(columns=[col], inplace=True)
+    #     X_te.drop(columns=[col], inplace=True)
     target_encoder1 = TargetEncoder(shuffle=True, cv=5, smooth="auto", random_state=42)
     target_encoder2 = TargetEncoder(shuffle=True, cv=5, smooth=10.0, random_state=123)
     target_encoder4 = TargetEncoder(shuffle=True, cv=5, smooth=50.0, random_state=456)
@@ -149,11 +149,11 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(X, y), 1):
     params = {
         "objective": "binary:logistic",
         "eval_metric": "auc",
-        "learning_rate": 0.02+0.01,
+        "learning_rate": 0.02 + 0.01,
         "max_depth": 6,
         "min_child_weight": 5,
         "subsample": 0.8,
-        "colsample_bytree": 0.2+0.1,
+        "colsample_bytree": 0.2 + 0.1,
         "tree_method": "hist",
         "random_state": 42 + fold,
         "n_jobs": -1
